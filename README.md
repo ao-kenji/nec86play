@@ -1,13 +1,16 @@
 nec86play
 =========
 
-nec86play - PC-9801-86 sound board test program for OpenBSD/luna88k
+nec86play - PC-9801-86 sound board test program on OpenBSD/luna88k
 
 This is my experimental program to use PC-9801-86 sound board on
 OpenBSD/luna88k.
 
-To use this program, you need to apply the following patch.  Then
-rebuild your kernel, install, and reboot.
+Preparation
+-----------
+To use this program,
+
+1. You need to apply the following patch.  Then rebuild your kernel, install.
 ```
 Index: sys/arch/m88k/m88k/mem.c
 ===================================================================
@@ -21,7 +24,7 @@ diff -u -r1.1 mem.c
  	int prot;
  {
 -	return (-1);
-+	/* XXX: temporary hack to mmap PC-9801 extention boards */
++	/* XXX: temporary hack to mmap PC-9801 extension boards */
 +	switch (minor(dev)) {
 +	case 0:
 +		return off;
@@ -33,4 +36,32 @@ diff -u -r1.1 mem.c
  /*ARGSUSED*/
 
 
+```
+
+2. Change securelevel to -1 in /etc/rc.securelevel.
+```
+# This is the desired security level
+# XXX
+# XXX it is not really acceptable to put this value in a configuration
+# XXX file, because locking it down requires immutability on about
+# XXX 5 files instead of 2 (the kernel and init)
+# XXX
+#securelevel=1
+securelevel=-1
+```
+
+3. Reboot your system.
+
+Compile
+-------
+
+Build by 'make'.  The executable binary is 'nec86play'.
+
+Run
+---
+
+You need root privileges.
+
+```
+% sudo ./nec86play
 ```
