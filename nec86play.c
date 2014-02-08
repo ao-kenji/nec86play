@@ -45,6 +45,7 @@ struct note {
 	int dur;	/* duration */
 };
 
+/* From "An die Freude / Ode to Joy" by Ludwig van Beethoven */
 struct note music[] = {
 	{ 64,	2400 },	/* E */
 	{ 64,	2400 },	/* E */
@@ -71,7 +72,7 @@ struct note music[] = {
 int
 main(int argc, char **argv)
 {
-	u_long rate = 8000;
+	u_long rate = 8000, hwrate;
 	u_int prec = 16;
 	int chan = 2;
 
@@ -113,11 +114,11 @@ main(int argc, char **argv)
 	nec86hw_set_precision_real(prec);
 	bits = nec86hw_rate_bits(rate);
 	nec86hw_set_rate_real(bits);
+	hwrate = nec86hw_rate_table[bits];
 
-	printf("requested rate: %d -> hardware rate: %d\n",
-		rate, nec86hw_rate_table[bits]);
+	printf("requested rate: %d -> hardware rate: %d\n", rate, hwrate);
 
-	nframes = set_data(buf, rate, freq[music[0].num], music[0].dur);
+	nframes = set_data(buf, hwrate, freq[music[0].num], music[0].dur);
 
 	nec86hw_reset_fifo();
 
@@ -138,7 +139,7 @@ main(int argc, char **argv)
 	for (;;) {
 		if (!finish) {
 			/* prepare next block */
-			nframes = set_data(buf, rate,
+			nframes = set_data(buf, hwrate,
 				freq[music[count].num], music[count].dur);
 		}
 
