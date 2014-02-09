@@ -10,7 +10,7 @@ Preparation
 -----------
 To use this program,
 
-1. You need to apply the following patch.  Then rebuild your kernel, install.
+You need to apply the following patch.  Then rebuild your kernel, install.
 ```
 Index: sys/arch/m88k/m88k/mem.c
 ===================================================================
@@ -38,7 +38,7 @@ diff -u -r1.1 mem.c
 
 ```
 
-2. Change securelevel to -1 in /etc/rc.securelevel.
+Change securelevel to -1 in /etc/rc.securelevel.
 ```
 # This is the desired security level
 # XXX
@@ -50,7 +50,7 @@ diff -u -r1.1 mem.c
 securelevel=-1
 ```
 
-3. Reboot your system.
+Reboot your system.
 
 Compile
 -------
