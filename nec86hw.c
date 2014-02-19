@@ -71,7 +71,11 @@ int nec86hw_rate_table[NEC86_NRATE] = {
 int
 nec86_open(void)
 {
+#if 0
 	nec86fd = open("/dev/mem", O_RDWR, 0600);
+#else
+	nec86fd = open("/dev/pc98ext0", O_RDWR, 0600);
+#endif
 	if (nec86fd == -1) {
 		perror("open");
 		return -1;
@@ -212,6 +216,48 @@ nec86hw_stop_fifo(void)
 }
 
 void
+nec86hw_enable_fifointr(void)
+{
+	u_int8_t data;
+
+	data = *(nec86core + NEC86_FIFOCTL);
+	data |= NEC86_FIFOCTL_ENBLINTR;
+	*(nec86core + NEC86_FIFOCTL) = data;
+}
+
+void
+nec86hw_disable_fifointr(void)
+{
+	u_int8_t data;
+
+	data = *(nec86core + NEC86_FIFOCTL);
+	data &= ~NEC86_FIFOCTL_ENBLINTR;
+	*(nec86core + NEC86_FIFOCTL) = data;
+}
+
+int
+nec86hw_seeif_intrflg(void)
+{
+	u_int8_t data;
+
+	data = *(nec86core + NEC86_FIFOCTL);
+
+	return (data & NEC86_FIFOCTL_INTRFLG);
+}
+
+void
+nec86hw_clear_intrflg(void)
+{
+	u_int8_t data;
+
+	data = *(nec86core + NEC86_FIFOCTL);
+	data &= ~NEC86_FIFOCTL_INTRFLG;
+	*(nec86core + NEC86_FIFOCTL) = data;
+	data |= NEC86_FIFOCTL_INTRFLG;
+	*(nec86core + NEC86_FIFOCTL) = data;
+}
+
+void
 nec86hw_reset_fifo(void)
 {
 	u_int8_t data;
@@ -221,6 +267,21 @@ nec86hw_reset_fifo(void)
 	*(nec86core + NEC86_FIFOCTL) = data;
 	data &= ~NEC86_FIFOCTL_INIT;
 	*(nec86core + NEC86_FIFOCTL) = data;
+}
+
+void
+nec86hw_set_watermark(int wm)
+{
+	/*
+	 * Must be called after nec86hw_start_fifo() and
+	 * nec86hw_enable_fifointr() are both called.
+	 */
+	if ((wm < NEC86_INTRBLK_UNIT) || (wm > NEC86_BUFFSIZE)
+		|| ((wm % NEC86_INTRBLK_UNIT) != 0))
+		printf("%s: invalid watermark %d\n", __func__, wm);
+
+	*(nec86core + NEC86_FIFOINTRBLK) =
+		(wm / NEC86_INTRBLK_UNIT) - 1;
 }
 
 void
