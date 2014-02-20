@@ -26,7 +26,9 @@
 #include <stdlib.h>	/* getprogname(3) */
 #include <unistd.h>	/* getopt(3) */
 #include <math.h>
+#include <sys/ioctl.h>
 #include "nec86hw.h"
+#include "/w1/o/hack/src/sys/arch/luna88k/include/pc98ext.h"
 
 void	usage(void);
 int	set_data(u_int8_t *, int, int, int);
@@ -76,6 +78,7 @@ main(int argc, char **argv)
 	u_int prec = 16;
 	int chan = 2;
 
+	int level = 5;	/* use INT 5 */
 	int count, finish, nframes;
 	u_int8_t bits;
 	u_int8_t *p = buf;
@@ -135,6 +138,8 @@ main(int argc, char **argv)
 	count = 1;
 	finish = 0;
 	nec86hw_start_fifo();
+	nec86hw_enable_fifointr();
+	nec86hw_set_watermark(2048);
 
 	for (;;) {
 		if (!finish) {
@@ -143,8 +148,9 @@ main(int argc, char **argv)
 				freq[music[count].num], music[count].dur);
 		}
 
-		/* wait for fifo becomes empty */
-		do { /* nothing */ } while (!nec86hw_seeif_fifo_empty());
+		/* wait for fifo becomes low */
+		ioctl(nec86fd, PCEXWAITINT, &level);
+		printf("INT.");
 
 		if (finish)
 			break;
@@ -157,6 +163,7 @@ main(int argc, char **argv)
 			finish = 1;
 	}
 
+	nec86hw_disable_fifointr();
 	nec86hw_stop_fifo();
 exit:
 	nec86_close();
