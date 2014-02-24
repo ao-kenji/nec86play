@@ -79,7 +79,8 @@ main(int argc, char **argv)
 	int chan = 2;
 
 	int level = 5;	/* use INT 5 */
-	int count, finish, nframes;
+	int count = 0;
+	int finish, nbytes, nframes, wm;
 	u_int8_t bits;
 	u_int8_t *p = buf;
 
@@ -121,7 +122,8 @@ main(int argc, char **argv)
 
 	printf("requested rate: %d -> hardware rate: %d\n", rate, hwrate);
 
-	nframes = set_data(buf, hwrate, freq[music[0].num], music[0].dur);
+	nframes = set_data(buf, hwrate, freq[music[count].num], music[count].dur);
+	printf("count=%d, put %d frames to buf\n", count, nframes);
 
 	nec86hw_reset_fifo();
 
@@ -132,37 +134,57 @@ main(int argc, char **argv)
 	}
 
 	/* send first block to fifo */
-	nec86fifo_output_stereo_16_direct(buf, nframes);	
+	nbytes = nec86fifo_output_stereo_16_direct(buf, nframes);	
+	printf("%d bytes to fifo\n", nbytes);
 
 	/* start fifo */
-	count = 1;
+	count++;
 	finish = 0;
 	nec86hw_start_fifo();
 	nec86hw_enable_fifointr();
-	nec86hw_set_watermark(2048);
+
+	wm = (hwrate * bpf / 8) & 0xffffff80;
+	printf("watermark is %d\n", wm);
+	nec86hw_set_watermark(wm);
 
 	for (;;) {
-		if (!finish) {
+		if (finish) {
+			/* prepare last silent block */
+			nframes = set_data(buf, hwrate, 0, 2400);
+			printf("count=%d, put %d frames to buf (silent)\n",
+				count, nframes);
+			/* send last silent block to fifo */
+			nec86hw_disable_fifointr();
+			nbytes = nec86fifo_output_stereo_16_direct(buf,
+				nframes);	
+			nec86hw_enable_fifointr();
+			printf("%d bytes to fifo (silent)\n", nbytes);
+		} else {
 			/* prepare next block */
 			nframes = set_data(buf, hwrate,
 				freq[music[count].num], music[count].dur);
+			printf("count=%d, put %d frames to buf\n",
+				count, nframes);
 		}
 
 		/* wait for fifo becomes low */
+		printf("wait for INT\n");
 		ioctl(nec86fd, PCEXWAITINT, &level);
-		printf("INT.");
+		nec86hw_clear_intrflg();
 
 		if (finish)
 			break;
 
 		/* send next block to fifo */
-		nec86fifo_output_stereo_16_direct(buf, nframes);	
+		nec86hw_disable_fifointr();
+		nbytes = nec86fifo_output_stereo_16_direct(buf, nframes);	
+		nec86hw_enable_fifointr();
+		printf("%d bytes to fifo\n", nbytes);
 
 		count++;
 		if (music[count].num == -1)
 			finish = 1;
 	}
-
 	nec86hw_disable_fifointr();
 	nec86hw_stop_fifo();
 exit:
