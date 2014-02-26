@@ -37,39 +37,11 @@ void	setup_freq_table();
 /* global */
 int bpf;		/* bytes per frame */
 int debug = 0;		/* debug */
-u_int8_t buf[NEC86_BUFFSIZE];
+u_int8_t  buf[NEC86_BUFFSIZE];
+u_int16_t wav[NEC86_BUFFSIZE / 2];
 
-#define NNOTE	128	/* number of MIDI note */
-int freq[NNOTE];
-
-struct note {
-	int num;	/* note number */
-	int dur;	/* duration */
-};
-
-/* From "An die Freude / Ode to Joy" by Ludwig van Beethoven */
-struct note music[] = {
-	{ 64,	2400 },	/* E */
-	{ 64,	2400 },	/* E */
-	{ 65,	2400 },	/* F */
-	{ 67,	2400 },	/* G */
-
-	{ 67,	2400 },	/* G */
-	{ 65,	2400 },	/* F */
-	{ 64,	2400 },	/* E */
-	{ 62,	2400 },	/* D */
-
-	{ 60,	2400 },	/* C */
-	{ 60,	2400 },	/* C */
-	{ 62,	2400 },	/* D */
-	{ 64,	2400 },	/* E */
-
-	{ 64,	3600 },	/* E */
-	{ 62,	1200 },	/* D */
-	{ 62,	4800 },	/* D */
-
-	{ -1,	-1 },	/* EOM: End Of Music:-) */
-};
+FILE *wav_fp = NULL;
+int wav_finish = 0;
 
 int
 main(int argc, char **argv)
@@ -77,6 +49,7 @@ main(int argc, char **argv)
 	u_long rate = 8000, hwrate;
 	u_int prec = 16;
 	int chan = 2;
+	int chunkframes;
 
 	int level = 5;	/* use INT 5 */
 	int count = 0;
@@ -107,9 +80,13 @@ main(int argc, char **argv)
 	argc -= optind;
 	argv += optind;
 
-	setup_freq_table();
+	if (argc != 1) {
+		usage();
+		return 1;
+	}
 
 	bpf = (prec / 8) * chan;	/* bytes per frame */
+	chunkframes = ((NEC86_BUFFSIZE + 4) / 2) / bpf;
 
 	nec86_open();
 	if (nec86hw_init() == -1) goto exit;
@@ -122,7 +99,12 @@ main(int argc, char **argv)
 
 	printf("requested rate: %d -> hardware rate: %d\n", rate, hwrate);
 
-	nframes = set_data(buf, hwrate, freq[music[count].num], music[count].dur);
+	printf("open %s\n", argv[0]);
+	if (wav_open(argv[0]) != 0)
+		return 1;
+
+	nframes = set_wav_data(buf, hwrate, chunkframes);
+	
 	printf("count=%d, put %d frames to buf\n", count, nframes);
 
 	nec86hw_reset_fifo();
@@ -143,26 +125,28 @@ main(int argc, char **argv)
 	nec86hw_start_fifo();
 	nec86hw_enable_fifointr();
 
-	wm = (hwrate * bpf / 8) & 0xffffff80;
+	wm = (hwrate * bpf / 2) & 0xffffff80; /* 0.5sec */
 	printf("watermark is %d\n", wm);
 	nec86hw_set_watermark(wm);
 
 	for (;;) {
-		if (finish) {
+		if (wav_finish) {
 			/* prepare last silent block */
-			nframes = set_data(buf, hwrate, 0, 2400);
+			nframes = set_data(buf, hwrate, 0, chunkframes);
 			printf("count=%d, put %d frames to buf (silent)\n",
 				count, nframes);
+
 			/* send last silent block to fifo */
 			nec86hw_disable_fifointr();
-			nbytes = nec86fifo_output_stereo_16_direct(buf,
-				nframes);	
+			nframes = set_wav_data(buf, hwrate, chunkframes);
+			printf("count=%d, put %d frames to buf\n",
+				count, nframes);
 			nec86hw_enable_fifointr();
+			nec86hw_set_watermark(wm);
 			printf("%d bytes to fifo (silent)\n", nbytes);
 		} else {
 			/* prepare next block */
-			nframes = set_data(buf, hwrate,
-				freq[music[count].num], music[count].dur);
+			nframes = set_wav_data(buf, hwrate, chunkframes);
 			printf("count=%d, put %d frames to buf\n",
 				count, nframes);
 		}
@@ -179,15 +163,16 @@ main(int argc, char **argv)
 		nec86hw_disable_fifointr();
 		nbytes = nec86fifo_output_stereo_16_direct(buf, nframes);	
 		nec86hw_enable_fifointr();
+		nec86hw_set_watermark(wm);
 		printf("%d bytes to fifo\n", nbytes);
 
 		count++;
-		if (music[count].num == -1)
-			finish = 1;
+		if (wav_finish) finish = 1;
 	}
 	nec86hw_disable_fifointr();
 	nec86hw_stop_fifo();
 exit:
+	wav_close();
 	nec86_close();
 }
 
@@ -223,20 +208,60 @@ set_data(u_int8_t *p, int rate, int hz, int samples)
 	return i;
 }
 
-void
-usage(void)
+int
+set_wav_data(u_int8_t *p, int rate, int samples)
 {
-	printf("Usage: %s [options] ...\n", getprogname());
-	printf("\t-d	: debug flag\n");
-	printf("\t-r #	: sampling rate\n");
-	exit(1);
+	/*
+	 * We use signed 16 bit data here.
+	 * The hardware is designed with MSByte first (Big Endian).
+	 */
+	int16_t val;
+	int i;
+	size_t ns;
+
+	/* If data size is larger than the hardware buffer size, clip it. */
+	if (samples > NEC86_BUFFSIZE / bpf)
+		samples = NEC86_BUFFSIZE / bpf;
+
+	bzero(wav, NEC86_BUFFSIZE);
+	ns = fread(wav, sizeof(u_int16_t), samples * 2, wav_fp);
+	printf("%s: read %d samples\n", __func__, ns / 2);
+
+	if (feof(wav_fp))
+		wav_finish = 1;
+	
+	for (i = 0; i < samples * 2; i+= 2) {
+		/* L channel */
+		*p++ = wav[i] & 0xff;
+		*p++ = (wav[i] >> 8) & 0xff;
+		/* R channel */
+		*p++ = wav[i + 1] & 0xff;
+		*p++ = (wav[i + 1] >> 8) & 0xff;
+	}
+	return samples;
+}
+
+int
+wav_open(char *wav_file)
+{
+	if ((wav_fp = fopen(wav_file, "rb")) == NULL)
+		return 1;
+	return 0;
+}
+
+int
+wav_close(void)
+{
+	return fclose(wav_fp);
+	wav_fp = NULL;
 }
 
 void
-setup_freq_table(void) {
-	int i;
-
-	for (i = 0; i < NNOTE; i++) {
-		freq[i] = (int)(440.0 * pow(2.0, ((double)i - 69.0) / 12.0));
-	}
+usage(void)
+{
+	printf("Usage: %s [options] wavfile.wav\n", getprogname());
+	printf("\t-d	: debug flag\n");
+	printf("\t-r #	: sampling rate\n");
+	printf("\twavfile must be LE, 16bit, stereo\n");
+	exit(1);
 }
