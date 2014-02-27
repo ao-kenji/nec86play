@@ -91,6 +91,8 @@ main(int argc, char **argv)
 	nec86_open();
 	if (nec86hw_init() == -1) goto exit;
 
+	ioctl(nec86fd, PCEXSETLEVEL, &level);
+
 	nec86hw_set_mode_playing();
 	nec86hw_set_precision_real(prec);
 	bits = nec86hw_rate_bits(rate);
@@ -173,6 +175,7 @@ main(int argc, char **argv)
 	nec86hw_stop_fifo();
 exit:
 	wav_close();
+	ioctl(nec86fd, PCEXRESETLEVEL, &level);
 	nec86_close();
 }
 
