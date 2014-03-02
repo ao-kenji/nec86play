@@ -28,7 +28,7 @@
 #include <math.h>
 #include <sys/ioctl.h>
 #include "nec86hw.h"
-#include "/w1/o/hack/src/sys/arch/luna88k/include/pc98ext.h"
+#include "/w1/o/hack/src/sys/arch/luna88k/include/pc98ex.h"
 
 void	usage(void);
 int	set_data(u_int8_t *, int, int, int);
