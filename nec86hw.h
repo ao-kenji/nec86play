@@ -76,4 +76,7 @@ void	nec86hw_dump_register(void);
 extern u_int8_t *pc98iobase;
 extern u_int8_t *nec86base;
 extern u_int8_t *nec86core;
+extern u_int8_t *ym2608reg;
+extern u_int8_t *ym2608data;
 extern int	nec86fd;
+extern int	nec86intlevel;

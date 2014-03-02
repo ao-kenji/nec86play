@@ -59,7 +59,11 @@
 u_int8_t *pc98iobase;
 u_int8_t *nec86base;
 u_int8_t *nec86core;
+u_int8_t *ym2608reg;
+u_int8_t *ym2608data;
+
 int	nec86fd;
+int	nec86intlevel;
 
 int nec86hw_rate_table[NEC86_NRATE] = {
 	44100, 33075, 22050, 16538, 11025, 8269, 5513, 4134
@@ -78,7 +82,7 @@ nec86_open(void)
 	}
 
 	pc98iobase = (u_int8_t *)mmap(NULL, 0x10000, PROT_READ | PROT_WRITE,
-		MAP_SHARED, nec86fd, 0x91000000);
+		MAP_SHARED, nec86fd, 0);
 
 	if (pc98iobase == MAP_FAILED) {
 		perror("mmap");
@@ -113,8 +117,17 @@ nec86hw_init(void)
 	data = *nec86base;
 
 	switch (data & 0xf0) {
-	case 0x40: /* 86 board with I/O port 0x188 */
-	case 0x50: /* 86 board with I/O port 0x288 */
+	case 0x40:
+		/* 86 board with I/O port 0x188 */
+		ym2608reg  = pc98iobase + 0x188;
+		ym2608data = pc98iobase + 0x18a;
+		/* disable YM2608 extended function */
+		*nec86base = (data & 0xfe);
+		break;
+	case 0x50:
+		/* 86 board with I/O port 0x288 */
+		ym2608reg  = pc98iobase + 0x288;
+		ym2608data = pc98iobase + 0x28a;
 		/* disable YM2608 extended function */
 		*nec86base = (data & 0xfe);
 		break;
@@ -123,11 +136,29 @@ nec86hw_init(void)
 		return -1;	/* can not find 86 board */
 	}
 
-#if 0
 	/* YM2608 register 0x0e has INT and joystick information */
-	*(pc98iobase + 0x0188) = 0x0e;
-	data = *(pc98iobase + 0x018a);
-#endif
+	*ym2608reg = 0x0e;
+	data = *ym2608data;
+
+	switch (data & 0xc0) {
+	case 0x00:
+		nec86intlevel = 0;
+		break;
+	case 0x40:
+		nec86intlevel = 6;
+		break;
+	case 0x80:
+		nec86intlevel = 4;
+		break;
+	case 0xc0:
+		nec86intlevel = 5;
+		break;
+	default:
+		/* Can not happen, set default */
+		nec86intlevel = 5;
+		break;
+	}
+	printf("INT = %d\n", nec86intlevel);
 
 	/* set default gains */
 	nec86hw_set_volume(NEC86_VOLUME_PORT_OPNAD, NEC86_MAXVOL);
