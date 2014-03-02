@@ -51,7 +51,7 @@ main(int argc, char **argv)
 	int chan = 2;
 	int chunkframes;
 
-	int level = 5;	/* use INT 5 */
+	int level = nec86intlevel;
 	int count = 0;
 	int finish, nbytes, nframes, wm;
 	u_int8_t bits;
