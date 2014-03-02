@@ -71,11 +71,7 @@ int nec86hw_rate_table[NEC86_NRATE] = {
 int
 nec86_open(void)
 {
-#if 0
-	nec86fd = open("/dev/mem", O_RDWR, 0600);
-#else
-	nec86fd = open("/dev/pc98ext0", O_RDWR, 0600);
-#endif
+	nec86fd = open("/dev/pcexio", O_RDWR, 0600);
 	if (nec86fd == -1) {
 		perror("open");
 		return -1;
