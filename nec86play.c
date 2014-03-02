@@ -15,11 +15,9 @@
  */
 
 /*
- * NEC PC-9801-86 sound board test on OpenBSD/luna88k
+ * NEC PC-9801-86 sound board test (PCM part) on OpenBSD/luna88k
  *
- * Note
- * If you want to write data to the mmapped device, you must change
- * securelevel to -1 in /etc/rc.securelevel and reboot your system.
+ * Note: use with /dev/pcexio support kernel.
  */
 
 #include <stdio.h>
@@ -85,8 +83,8 @@ main(int argc, char **argv)
 		return 1;
 	}
 
-	bpf = (prec / 8) * chan;	/* bytes per frame */
-	chunkframes = ((NEC86_BUFFSIZE + 4) / 2) / bpf;
+	/* bytes per frame */
+	bpf = (prec / 8) * chan;
 
 	nec86_open();
 	if (nec86hw_init() == -1) goto exit;
@@ -101,6 +99,16 @@ main(int argc, char **argv)
 
 	printf("requested rate: %d -> hardware rate: %d\n", rate, hwrate);
 
+	/* number of frames in one chunk = half of hardware FIFO */
+	chunkframes = (NEC86_BUFFSIZE + 4) / bpf / 2;
+
+	/* watermark is 1/4 of chunkframes, should be multiple of 128 */
+	wm = (((hwrate * bpf / 2) >> 7) << 7); /* 0.5sec */
+#if 0
+	wm = (chunkframes * bpf / 4) & 0xffffff80;
+#endif
+	printf("chunkframes %d, watermark %d bytes\n", chunkframes, wm);
+
 	printf("open %s\n", argv[0]);
 	if (wav_open(argv[0]) != 0)
 		return 1;
@@ -111,12 +119,6 @@ main(int argc, char **argv)
 
 	nec86hw_reset_fifo();
 
-	if (debug) {
-		/* check status */
-		printf("full: 0x%02x, empty: 0x%02x\n",
-			nec86hw_seeif_fifo_full(), nec86hw_seeif_fifo_empty());
-	}
-
 	/* send first block to fifo */
 	nbytes = nec86fifo_output_stereo_16_direct(buf, nframes);	
 	printf("%d bytes to fifo\n", nbytes);
@@ -126,9 +128,6 @@ main(int argc, char **argv)
 	finish = 0;
 	nec86hw_start_fifo();
 	nec86hw_enable_fifointr();
-
-	wm = (hwrate * bpf / 2) & 0xffffff80; /* 0.5sec */
-	printf("watermark is %d\n", wm);
 	nec86hw_set_watermark(wm);
 
 	for (;;) {
@@ -144,7 +143,7 @@ main(int argc, char **argv)
 			printf("count=%d, put %d frames to buf\n",
 				count, nframes);
 			nec86hw_enable_fifointr();
-			nec86hw_set_watermark(wm);
+			nec86hw_set_watermark(wm);	/* need this? */
 			printf("%d bytes to fifo (silent)\n", nbytes);
 		} else {
 			/* prepare next block */
@@ -165,7 +164,7 @@ main(int argc, char **argv)
 		nec86hw_disable_fifointr();
 		nbytes = nec86fifo_output_stereo_16_direct(buf, nframes);	
 		nec86hw_enable_fifointr();
-		nec86hw_set_watermark(wm);
+		nec86hw_set_watermark(wm);	/* need this? */
 		printf("%d bytes to fifo\n", nbytes);
 
 		count++;
