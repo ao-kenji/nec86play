@@ -35,8 +35,13 @@ void	setup_freq_table();
 /* global */
 int bpf;		/* bytes per frame */
 int debug = 0;		/* debug */
-u_int8_t  buf[NEC86_BUFFSIZE];
-u_int16_t wav[NEC86_BUFFSIZE / 2];
+u_int8_t  buf[NEC86_BUFFSIZE + 4];
+u_int16_t wav[(NEC86_BUFFSIZE + 4) / 2];
+#if 0
+u_int8_t  fread_buf[NEC86_BUFFSIZE + 4];
+#else
+u_int8_t  fread_buf[65536];
+#endif
 
 FILE *wav_fp = NULL;
 int wav_finish = 0;
@@ -49,7 +54,7 @@ main(int argc, char **argv)
 	int chan = 2;
 	int chunkframes;
 
-	int level = nec86intlevel;
+	int level;
 	int count = 0;
 	int finish, nbytes, nframes, wm;
 	u_int8_t bits;
@@ -89,7 +94,13 @@ main(int argc, char **argv)
 	nec86_open();
 	if (nec86hw_init() == -1) goto exit;
 
-	ioctl(nec86fd, PCEXSETLEVEL, &level);
+	/* should be set after calling nec86hw_init()! */
+	level = nec86intlevel;
+
+	if (ioctl(nec86fd, PCEXSETLEVEL, &level) != 0) {
+		printf("PCEXSETLEVEL failed\n");
+		goto exit;
+	}
 
 	nec86hw_set_mode_playing();
 	nec86hw_set_precision_real(prec);
@@ -99,14 +110,15 @@ main(int argc, char **argv)
 
 	printf("requested rate: %d -> hardware rate: %d\n", rate, hwrate);
 
-	/* number of frames in one chunk = half of hardware FIFO */
-	chunkframes = (NEC86_BUFFSIZE + 4) / bpf / 2;
+	/* number of frames in one chunk = 75% of hardware FIFO */
+	chunkframes = (NEC86_BUFFSIZE + 4) / bpf * 3 / 4;
 
-	/* watermark is 1/4 of chunkframes, should be multiple of 128 */
-	wm = (((hwrate * bpf / 2) >> 7) << 7); /* 0.5sec */
+	/* watermark is 1/2 of chunkframes, should be multiple of 128 */
 #if 0
 	wm = (chunkframes * bpf / 4) & 0xffffff80;
 #endif
+	wm = ((NEC86_BUFFSIZE + 4) - chunkframes * bpf) & 0xffffff80;
+
 	printf("chunkframes %d, watermark %d bytes\n", chunkframes, wm);
 
 	printf("open %s\n", argv[0]);
@@ -248,6 +260,7 @@ wav_open(char *wav_file)
 {
 	if ((wav_fp = fopen(wav_file, "rb")) == NULL)
 		return 1;
+	setvbuf(wav_fp, fread_buf, _IOFBF, sizeof(fread_buf));
 	return 0;
 }
 
