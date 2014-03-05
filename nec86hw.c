@@ -63,7 +63,7 @@ u_int8_t *ym2608reg;
 u_int8_t *ym2608data;
 
 int	nec86fd;
-int	nec86intlevel;
+int	nec86intlevel = -1;	/* -1: not initialied */
 
 int nec86hw_rate_table[NEC86_NRATE] = {
 	44100, 33075, 22050, 16538, 11025, 8269, 5513, 4134
@@ -121,22 +121,29 @@ nec86hw_init(void)
 		/* 86 board with I/O port 0x188 */
 		ym2608reg  = pc98iobase + 0x188;
 		ym2608data = pc98iobase + 0x18a;
-		/* disable YM2608 extended function */
-		*nec86base = (data & 0xfe);
 		break;
 	case 0x50:
 		/* 86 board with I/O port 0x288 */
 		ym2608reg  = pc98iobase + 0x288;
 		ym2608data = pc98iobase + 0x28a;
-		/* disable YM2608 extended function */
-		*nec86base = (data & 0xfe);
 		break;
 	default:
 		/* can not find 86 board */
 		return -1;	/* can not find 86 board */
 	}
 
-	/* YM2608 register 0x0e has INT and joystick information */
+	/* enable YM2608 extended function */
+	data &= 0xfd;
+	*nec86base = (data | 0x01);
+
+	/* YM2608 I/O port set (IOA:input IOB:output) */
+	*ym2608reg = 0x07;
+	data = *ym2608data;
+	data &= 0x3f;
+	data |= 0x80;
+	*ym2608data = data;
+	
+	/* YM2608 register 0x0e has INT (and joystick) information */
 	*ym2608reg = 0x0e;
 	data = *ym2608data;
 
@@ -154,12 +161,15 @@ nec86hw_init(void)
 		nec86intlevel = 5;
 		break;
 	default:
-		/* Can not happen, set default */
-		nec86intlevel = 5;
-		break;
+		/* can not happen */
+		return -1;
 	}
-	printf("INT = %d\n", nec86intlevel);
+	printf("Using INT%d\n", nec86intlevel);
 
+	/* reset YM2608 timer */
+	*ym2608reg = 0x27;
+	*ym2608data = 0x30;
+	
 	/* set default gains */
 	nec86hw_set_volume(NEC86_VOLUME_PORT_OPNAD, NEC86_MAXVOL);
 	nec86hw_set_volume(NEC86_VOLUME_PORT_OPNAI, NEC86_MAXVOL);
