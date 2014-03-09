@@ -8,9 +8,7 @@ OpenBSD/luna88k.
 
 Preparation
 -----------
-To use this program,
-
-You need to apply the following diff.
+To use this program, you need to apply the following diff.
 
 https://gist.github.com/ao-kenji/9430739
 
