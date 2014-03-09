@@ -10,47 +10,27 @@ Preparation
 -----------
 To use this program,
 
-You need to apply the following patch.  Then rebuild your kernel, install.
-```
-Index: sys/arch/m88k/m88k/mem.c
-===================================================================
-RCS file: /cvs/src/sys/arch/m88k/m88k/mem.c,v
-retrieving revision 1.1
-diff -u -r1.1 mem.c
---- sys/arch/m88k/m88k/mem.c	31 Dec 2010 21:38:08 -0000	1.1
-+++ sys/arch/m88k/m88k/mem.c	8 Feb 2014 07:50:47 -0000
-@@ -168,7 +168,13 @@
-         off_t off;
- 	int prot;
- {
--	return (-1);
-+	/* XXX: temporary hack to mmap PC-9801 extension boards */
-+	switch (minor(dev)) {
-+	case 0:
-+		return off;
-+	default:
-+		return (-1);
-+	}
- }
- 
- /*ARGSUSED*/
+You need to apply the following diff.
+https://gist.github.com/ao-kenji/9430739
 
-
+Then add the following device description to your 'config' file.
+Or PC98EX config file, which is included in above diff, can be used.
 ```
-
-Change securelevel to -1 in /etc/rc.securelevel.
+# PC-9801 extension slot
+pc98ex0         at mainbus0
 ```
-# This is the desired security level
-# XXX
-# XXX it is not really acceptable to put this value in a configuration
-# XXX file, because locking it down requires immutability on about
-# XXX 5 files instead of 2 (the kernel and init)
-# XXX
-#securelevel=1
-securelevel=-1
+Build the new kernel, then reboot your system.  You may see
 ```
+pc98ex0 at mainbus0
+```
+in dmesg.
 
-Reboot your system.
+Add device file in /dev.
+```
+cd /dev
+sudo mknod -m 660 pcexmem c 25 0
+sudo mknod -m 660 pcexio c 25 1
+```
 
 Compile
 -------
@@ -59,9 +39,7 @@ Build by 'make'.  The executable binary is 'nec86play'.
 
 Run
 ---
-
-You need root privileges.
-
 ```
-% sudo ./nec86play
+% ./nec86play -r 22050 sample.wav
 ```
+'wav' file must be in little-endian, 16bit, and stereo for now.
