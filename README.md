@@ -8,19 +8,11 @@ OpenBSD/luna88k.
 
 Preparation
 -----------
-To use this program, you need to apply the following diff.
+To use this program, update the source tree, at least dated 2014-Apr-16.
 
-https://gist.github.com/ao-kenji/9430739
-
-Then add the following device description to your 'config' file.
-Or PC98EX config file, which is included in above diff, can be used.
+Build the new GENERIC kernel, then reboot your system.  You may see
 ```
-# PC-9801 extension slot
-pc98ex0         at mainbus0
-```
-Build the new kernel, then reboot your system.  You may see
-```
-pc98ex0 at mainbus0
+pcex0 at mainbus0
 ```
 in dmesg.  Then, add device files in /dev.
 ```
