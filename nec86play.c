@@ -26,7 +26,7 @@
 #include <math.h>
 #include <sys/ioctl.h>
 #include "nec86hw.h"
-#include "/w1/o/hack/src/sys/arch/luna88k/include/pc98ex.h"
+#include "/w1/o/hack/src/sys/arch/luna88k/include/pcex.h"
 
 void	usage(void);
 int	set_data(u_int8_t *, int, int, int);
@@ -54,7 +54,7 @@ main(int argc, char **argv)
 	int chan = 2;
 	int chunkframes;
 
-	int level;
+	u_int level;
 	int count = 0;
 	int finish, nbytes, nframes, wm;
 	u_int8_t bits;
