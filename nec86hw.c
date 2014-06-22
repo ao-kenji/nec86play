@@ -164,7 +164,6 @@ nec86hw_init(void)
 		/* can not happen */
 		return -1;
 	}
-	printf("Using INT%d\n", nec86intlevel);
 
 	/* reset YM2608 timer */
 	*ym2608reg = 0x27;
