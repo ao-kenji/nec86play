@@ -25,8 +25,8 @@
 #include <unistd.h>	/* getopt(3) */
 #include <math.h>
 #include <sys/ioctl.h>
+#include <machine/pcex.h>
 #include "nec86hw.h"
-#include "/w1/o/hack/src/sys/arch/luna88k/include/pcex.h"
 
 void	usage(void);
 int	set_data(u_int8_t *, int, int, int);
@@ -260,6 +260,12 @@ wav_open(char *wav_file)
 {
 	if ((wav_fp = fopen(wav_file, "rb")) == NULL)
 		return 1;
+	/* XXX: Skip 44 bytes = typical header size */
+	if (fseek(wav_fp, 44, SEEK_SET) != 0) {
+		fclose(wav_fp);
+		return 1;
+	}
+	/* XXX: Is this effective? */
 	setvbuf(wav_fp, fread_buf, _IOFBF, sizeof(fread_buf));
 	return 0;
 }
