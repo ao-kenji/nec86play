@@ -28,6 +28,8 @@
 #include <machine/pcex.h>
 #include "nec86hw.h"
 
+#define DPRINTF(x)      if (debug) printf x
+
 void	usage(void);
 int	set_data(u_int8_t *, int, int, int);
 void	setup_freq_table();
@@ -96,6 +98,7 @@ main(int argc, char **argv)
 
 	/* should be set after calling nec86hw_init()! */
 	level = nec86intlevel;
+	DPRINTF(("Using INT%d\n", level));
 
 	if (ioctl(nec86fd, PCEXSETLEVEL, &level) != 0) {
 		printf("PCEXSETLEVEL failed\n");
@@ -108,7 +111,7 @@ main(int argc, char **argv)
 	nec86hw_set_rate_real(bits);
 	hwrate = nec86hw_rate_table[bits];
 
-	printf("requested rate: %d -> hardware rate: %d\n", rate, hwrate);
+	DPRINTF(("requested rate: %d -> hardware rate: %d\n", rate, hwrate));
 
 	/* number of frames in one chunk = 75% of hardware FIFO */
 	chunkframes = (NEC86_BUFFSIZE + 4) / bpf * 3 / 4;
@@ -119,21 +122,21 @@ main(int argc, char **argv)
 #endif
 	wm = ((NEC86_BUFFSIZE + 4) - chunkframes * bpf) & 0xffffff80;
 
-	printf("chunkframes %d, watermark %d bytes\n", chunkframes, wm);
+	DPRINTF(("chunkframes %d, watermark %d bytes\n", chunkframes, wm));
 
-	printf("open %s\n", argv[0]);
+	DPRINTF(("open %s\n", argv[0]));
 	if (wav_open(argv[0]) != 0)
 		return 1;
 
 	nframes = set_wav_data(buf, hwrate, chunkframes);
 	
-	printf("count=%d, put %d frames to buf\n", count, nframes);
+	DPRINTF(("count=%d, put %d frames to buf\n", count, nframes));
 
 	nec86hw_reset_fifo();
 
 	/* send first block to fifo */
 	nbytes = nec86fifo_output_stereo_16_direct(buf, nframes);	
-	printf("%d bytes to fifo\n", nbytes);
+	DPRINTF(("%d bytes to fifo\n", nbytes));
 
 	/* start fifo */
 	count++;
@@ -146,26 +149,26 @@ main(int argc, char **argv)
 		if (wav_finish) {
 			/* prepare last silent block */
 			nframes = set_data(buf, hwrate, 0, chunkframes);
-			printf("count=%d, put %d frames to buf (silent)\n",
-				count, nframes);
+			DPRINTF(("count=%d, put %d frames to buf (silent)\n",
+				count, nframes));
 
 			/* send last silent block to fifo */
 			nec86hw_disable_fifointr();
 			nframes = set_wav_data(buf, hwrate, chunkframes);
-			printf("count=%d, put %d frames to buf\n",
-				count, nframes);
+			DPRINTF(("count=%d, put %d frames to buf\n",
+				count, nframes));
 			nec86hw_enable_fifointr();
 			nec86hw_set_watermark(wm);	/* need this? */
-			printf("%d bytes to fifo (silent)\n", nbytes);
+			DPRINTF(("%d bytes to fifo (silent)\n", nbytes));
 		} else {
 			/* prepare next block */
 			nframes = set_wav_data(buf, hwrate, chunkframes);
-			printf("count=%d, put %d frames to buf\n",
-				count, nframes);
+			DPRINTF(("count=%d, put %d frames to buf\n",
+				count, nframes));
 		}
 
 		/* wait for fifo becomes low */
-		printf("wait for INT\n");
+		DPRINTF(("wait for INT\n"));
 		ioctl(nec86fd, PCEXWAITINT, &level);
 		nec86hw_clear_intrflg();
 
@@ -177,7 +180,7 @@ main(int argc, char **argv)
 		nbytes = nec86fifo_output_stereo_16_direct(buf, nframes);	
 		nec86hw_enable_fifointr();
 		nec86hw_set_watermark(wm);	/* need this? */
-		printf("%d bytes to fifo\n", nbytes);
+		DPRINTF(("%d bytes to fifo\n", nbytes));
 
 		count++;
 		if (wav_finish) finish = 1;
@@ -200,9 +203,7 @@ set_data(u_int8_t *p, int rate, int hz, int samples)
 	int16_t val;
 	int i;
 
-	if (debug) {
-		printf("hz: %d, samples: %d\n", hz, samples);
-	}
+	DPRINTF(("hz: %d, samples: %d\n", hz, samples));
 
 	/* If data size is larger than the hardware buffer size, clip it. */
 	if (samples > NEC86_BUFFSIZE / bpf)
@@ -239,7 +240,7 @@ set_wav_data(u_int8_t *p, int rate, int samples)
 
 	bzero(wav, NEC86_BUFFSIZE);
 	ns = fread(wav, sizeof(u_int16_t), samples * 2, wav_fp);
-	printf("%s: read %d samples\n", __func__, ns / 2);
+	DPRINTF(("%s: read %d samples\n", __func__, ns / 2));
 
 	if (feof(wav_fp))
 		wav_finish = 1;
