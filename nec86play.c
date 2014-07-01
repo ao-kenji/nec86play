@@ -28,6 +28,7 @@
 #include <machine/pcex.h>
 #include "nec86hw.h"
 
+#define DEFAULT_RATE	11025
 #define DPRINTF(x)      if (debug) printf x
 
 void	usage(void);
@@ -51,7 +52,7 @@ int wav_finish = 0;
 int
 main(int argc, char **argv)
 {
-	u_long rate = 8000, hwrate;
+	u_long rate = DEFAULT_RATE, hwrate;
 	u_int prec = 16;
 	int chan = 2;
 	int chunkframes;
@@ -191,6 +192,8 @@ exit:
 	wav_close();
 	ioctl(nec86fd, PCEXRESETLEVEL, &level);
 	nec86_close();
+
+	return 0;
 }
 
 int
